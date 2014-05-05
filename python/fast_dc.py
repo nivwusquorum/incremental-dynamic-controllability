@@ -19,18 +19,19 @@ class FastDc(object):
 
     def generate_graph(self):
         """Generates graph of edges as in section 2.2"""
-        self.edge_list = []
+        edge_list = []
         for e in self.network.controllable_edges:
-            self.edge_list.append(Edge(e.fro, e.to, e.upper_bound, EdgeType.SIMPLE))
-            self.edge_list.append(Edge(e.to, e.fro, -e.lower_bound, EdgeType.SIMPLE))
+            edge_list.append(Edge(e.fro, e.to, e.upper_bound, EdgeType.SIMPLE))
+            edge_list.append(Edge(e.to, e.fro, -e.lower_bound, EdgeType.SIMPLE))
 
         for e in self.network.uncontrollable_edges:
-            self.edge_list.append(Edge(e.fro, e.to, e.upper_bound, EdgeType.SIMPLE))
-            self.edge_list.append(Edge(e.to, e.fro, -e.lower_bound, EdgeType.SIMPLE))
-            self.edge_list.append(Edge(e.to, e.fro, -e.upper_bound, EdgeType.UPPER_CASE, e.to))
-            self.edge_list.append(Edge(e.fro, e.to, e.lower_bound, EdgeType.LOWER_CASE, e.to))
+            edge_list.append(Edge(e.fro, e.to, e.upper_bound, EdgeType.SIMPLE))
+            edge_list.append(Edge(e.to, e.fro, -e.lower_bound, EdgeType.SIMPLE))
+            edge_list.append(Edge(e.to, e.fro, -e.upper_bound, EdgeType.UPPER_CASE, e.to))
+            edge_list.append(Edge(e.fro, e.to, e.lower_bound, EdgeType.LOWER_CASE, e.to))
+        return edge_list
 
-    def allmax(self):
+    def allmax(self, num_nodes, edge_list):
         """Calculates allmax projection of STNU (see section 2.2). 
 
         Returns two parameters:
@@ -40,7 +41,7 @@ class FastDc(object):
         weights = {}
         neighbor_list = defaultdict(lambda: set())
 
-        for e in self.edge_list:
+        for e in edge_list:
             if e.type != EdgeType.LOWER_CASE:
                 pair = (e.fro, e.to)
                 neighbor_list[e.fro].add(e.to)
@@ -48,13 +49,15 @@ class FastDc(object):
                     weights[pair] = e.value
         
         # Like in Johnson's algorithm we add node 0 artificially 
-        for node in range(1, self.network.num_nodes + 1):
+        for node in xrange(1, num_nodes + 1):
             weights[(0,node)] = 0
             neighbor_list[0].add(node)
 
         source = 0
-        num_nodes = self.network.num_edges + 1
-        terminated, distances = self.spfa(source, num_nodes, weights, neighbor_list)
+        terminated, distances = self.spfa(source = 0,
+                                          num_nodes=num_nodes + 1,
+                                          weights=weights,
+                                          neighbor_list=neighbor_list)
 
         # exclude artificial 0 node from result
         return (terminated, distances[1:] if distances else None)
@@ -102,20 +105,31 @@ class FastDc(object):
         else:
             return (True, distance)
 
-    def reduce_lower_case(self, lc_edge):
-        # FIXME(szymon): stub
-        return []
+    def reduce_lower_case(self, potentials, edge_list, lc_edge):
+        new_edges = []
+        distances = [0] * self.network.num_nodes
+
+        return new_edges
 
     def solve(self):
         """Implementation of pseudocode from end of section 3"""
         K = len(self.network.uncontrollable_edges)
-        self.generate_graph()
-        for _ in range(K):
-            consistent, potentials = self.allmax()
+        new_edges = self.generate_graph()
+        num_nodes = self.network.num_nodes
+        completed_iterations = 0
+        all_edges = []
+        while len(new_edges) > 0 and completed_iterations <= K:
+            all_edges.extend(new_edges)
+            new_edges = []
+            consistent, potentials = self.allmax(num_nodes, all_edges)
             if not consistent:
                 return False
-            for e in self.edge_list:
+            for e in all_edges:
                 if e.type == EdgeType.LOWER_CASE:
-                    new_edges = self.reduce_lower_case(e)
-                    self.edge_list.extend(new_edges)
+                    reduced_edges = self.reduce_lower_case(num_nodes, potentials, e)
+                    new_edges.extend(reduced_edges)
+            completed_iterations += 1
+        # Assuming the theory from the paper checks out. We need one extra
+        # iteration to verify that no edge was actually added.
+        assert completed_iterations <= K+1
         return True
