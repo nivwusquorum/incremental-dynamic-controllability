@@ -4,13 +4,12 @@ import sys
 
 gflags.DEFINE_string('input_file', None, 'XML file to convert')
 gflags.MarkFlagAsRequired('input_file')
+gflags.DEFINE_enum('input_type', 'xml', ['xml', 'parsable'], 'Type of input file')
 gflags.DEFINE_enum('output_type', 'summary', ['summary', 'dot', 'parsable'], 'Type of output to convert the file to')
 
 FLAGS = gflags.FLAGS
 
 def get_node_renaming(edge_list):
-    names = set()
-
     def num_to_name(num):
         assert num >= 1
         result = []
@@ -26,13 +25,19 @@ def get_node_renaming(edge_list):
         result.reverse()
         return ''.join([chr(ord('A') + x-1) for x in result])
 
+    names = set()
     for start, end, _, _, _ in edge_list:
         names.add(start)
         names.add(end)
     renaming = {}
     next_number = 1
-    for name in names:
+    # make sure names are sorted
+    ordered_names = [ (len(name), name) for name in names]
+    ordered_names.sort()
+
+    for _, name in ordered_names:
         renaming[name] = num_to_name(next_number)
+        #print '%s -> %s' % (name, renaming[name])
         next_number += 1
     return renaming
 
@@ -77,9 +82,7 @@ def parsable(edge_list):
     for edge in uncontrollable:
         print '%s %s %s %s' % (renaming[edge[0]], renaming[edge[1]], edge[2], edge[3])
 
-def main():
-    argv = FLAGS(sys.argv)
-    #print 'Parsing %s' % (FLAGS.input_file,)
+def parse_xml():
     tree = ET.parse(FLAGS.input_file)
     edge_list = []
     for constraint in tree.getroot().findall('CONSTRAINT'):
@@ -91,6 +94,29 @@ def main():
                           constraint.find('LOWERBOUND').text,
                           constraint.find('UPPERBOUND').text,
                           type))
+    return edge_list
+
+def parse_parsable():
+    with open(FLAGS.input_file, 'r') as file:
+        edge_list = []
+        num_controllable = int(file.readline()[:-1])
+        for _ in xrange(num_controllable):
+            start, end, lb, ub = tuple(file.readline()[:-1].split(' '))
+            edge_list.append((start, end, lb, ub, 'Controllable'))
+        num_uncontrollable = int(file.readline()[:-1])
+        for _ in xrange(num_uncontrollable):
+            start, end, lb, ub = tuple(file.readline()[:-1].split(' '))
+            edge_list.append((start, end, lb, ub, 'Uncontrollable'))
+        return edge_list
+
+def main():
+    argv = FLAGS(sys.argv)
+    # input parsing
+    if FLAGS.input_type == 'xml':
+        edge_list = parse_xml()
+    if FLAGS.input_type == 'parsable':
+        edge_list = parse_parsable()
+    # output generation
     if FLAGS.output_type == 'dot':
         generate_graphviz(edge_list)
     if FLAGS.output_type == 'summary':
