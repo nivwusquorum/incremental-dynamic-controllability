@@ -2,10 +2,12 @@ import gflags
 import xml.etree.ElementTree as ET
 import sys
 
+from collections import defaultdict
+
 gflags.DEFINE_string('input_file', None, 'XML file to convert')
 gflags.MarkFlagAsRequired('input_file')
 gflags.DEFINE_enum('input_type', 'xml', ['xml', 'parsable'], 'Type of input file')
-gflags.DEFINE_enum('output_type', 'summary', ['summary', 'dot', 'parsable'], 'Type of output to convert the file to')
+gflags.DEFINE_enum('output_type', 'summary', ['summary', 'dot', 'parsable', 'xml'], 'Type of output to convert the file to')
 
 FLAGS = gflags.FLAGS
 
@@ -82,6 +84,56 @@ def parsable(edge_list):
     for edge in uncontrollable:
         print '%s %s %s %s' % (renaming[edge[0]], renaming[edge[1]], edge[2], edge[3])
 
+def xml(edge_list):
+    names = set([e[0] for e in edge_list] + [e[1] for e in edge_list])
+    # topological sort
+    neighbors = defaultdict(lambda: set())
+    input_degree = {name:0 for name in names}
+
+    for edge in edge_list:
+        start, end = edge[0], edge[1]
+        neighbors[start].add(end)
+        input_degree[end]+=1
+
+    topological_order = []
+    new_nodes = [x for x in input_degree if input_degree[x] == 0]
+    while len(new_nodes) > 0:
+        topological_order.extend(new_nodes)
+        newer_nodes = []
+        for node in new_nodes:
+            for neighbor in neighbors[node]:
+                input_degree[neighbor] -= 1
+                if input_degree[neighbor] == 0:
+                    newer_nodes.append(neighbor)
+        new_nodes = newer_nodes
+    assert set(input_degree.values()) == set([0])
+
+    start_node = topological_order[0]
+    end_node = topological_order[-1]
+    print '<CCTP>'
+    print '    <NAME>main</NAME>'
+    print '    <START>%s</START>' % (start_node,)
+    print '    <END>%s</END>' % (end_node,)
+    print '    <EVENT-UNIT>millisecond</EVENT-UNIT>'
+    print '    <DURATION-UNIT>minute</DURATION-UNIT>'
+    for start, end, lb, ub, type in edge_list:
+        print '    <CONSTRAINT>'
+        print '        <START>%s</START>' % (start,)
+        print '        <END>%s</END>' % (end,)
+        print '        <ID>edge-%s%s</ID>' % (start, end)
+        print '        <NAME>irrelevant</NAME>'
+        print '        <LOWERBOUND>%s</LOWERBOUND>' % (lb,)
+        print '        <UPPERBOUND>%s</UPPERBOUND>' % (ub,)
+        print '        <TYPE>%s;Constraint</TYPE>' % (type,)
+        print '    </CONSTRAINT>'
+    for name in names:
+        print '    <EVENT>'
+        print '        <ID>%s</ID>' % (name,)
+        print '        <NAME>%s</NAME>' % (name,)
+        print '    </EVENT>'
+    print '</CCTP>'
+
+
 def parse_xml():
     tree = ET.parse(FLAGS.input_file)
     edge_list = []
@@ -123,6 +175,8 @@ def main():
         summary(edge_list)
     if FLAGS.output_type == 'parsable':
         parsable(edge_list)
+    if FLAGS.output_type == 'xml':
+        xml(edge_list)
 
 if __name__ == '__main__':
     main()
