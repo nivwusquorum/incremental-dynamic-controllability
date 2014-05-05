@@ -1,27 +1,24 @@
 #!/bin/bash
 set -o nounset
 set -o errexit
-TEST_DIR="$( pushd $1 > /dev/null  && pwd && popd > /dev/null)"
-DIR="$( pushd  "$( dirname "${BASH_SOURCE[0]}" )"/../.. > /dev/null && pwd && popd > /dev/null)"
-#pushd $DIR/../../
+DIR="$( pushd  "$( dirname "${BASH_SOURCE[0]}" )"/.. > /dev/null && pwd && popd > /dev/null)"
 
-pushd $DIR
-for filepath in $TEST_DIR/*
+for filepath in $@
 do
     fullfilename=$(basename "$filepath")
     extension="${fullfilename##*.}"
     filename="${fullfilename%.*}"
     if [[ $extension == "in" ]]
     then 
-        python tests/scripts/parser.py --input_file=$filepath \
+        python $DIR/scripts/parser.py --input_file=$filepath \
                                            --input_type=parsable \
                                            --output_type=xml \
                                             > $DIR/xml_input.tmp
         cp $filepath parsable_input.tmp
     elif [[ $extension == "xml" ]]
     then
-        cp $filepath xml_input.tmp
-        python tests/scripts/parser.py --input_file=$filepath \
+        cp $DIR/$filepath xml_input.tmp
+        python scripts/parser.py --input_file=$filepath \
                                            --input_type=xml \
                                            --output_type=parsable \
                                             > $DIR/parsable_input.tmp
@@ -30,7 +27,7 @@ do
         continue
     fi
     if !(/usr/bin/time -f'%e' \
-        java -jar java/dc-checking.jar xml_input.tmp 100000 \
+        java -jar $DIR/java/dc-checking.jar xml_input.tmp 100000 \
         > java_output.tmp \
         2> java_time.tmp)
     then 
@@ -39,7 +36,7 @@ do
         continue
     fi
     if !(/usr/bin/time -f'%e' \
-        python tester.py < parsable_input.tmp \
+        python $DIR/python/tester.py < parsable_input.tmp \
         > python_output.tmp \
         2> python_time.tmp)
     then 
@@ -48,7 +45,7 @@ do
         echo "lpl"
         continue
     fi
-    tests/scripts/output_flip.sh java_output.tmp
+    $DIR/scripts/output_flip.sh java_output.tmp
     JAVA_OUTPUT=$(cat java_output.tmp)
     PYTHON_OUTPUT=$(cat python_output.tmp)
     JAVA_TIME=$(cat java_time.tmp)
@@ -65,8 +62,3 @@ for file in {xml_input.tmp,parsable_input.tmp,java_output.tmp,python_output.tmp,
 do
     [ -f $file ] && rm $file
 done
-popd 
-
-
-
-#popd
