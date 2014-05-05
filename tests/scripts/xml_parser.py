@@ -43,14 +43,17 @@ def generate_graphviz(edge_list):
     for start, end, lb, ub, etype in edge_list:
         assert etype in ['Controllable', 'Uncontrollable'], \
                 "%s is not a valid edge type" % etype
-        edge_style = 'dotted' if etype == 'Uncontrollable' else 'solid'
+        style = 'dotted' if etype == 'Uncontrollable' else 'solid'
+        type_char = '?' if etype == 'Uncontrollable' else ''
         lb = '%.2f' % (float(lb))
         ub = '%.2f' % (float(ub),)
-        print "%s -> %s [label=\"[%s, %s]\", style=%s];" % (renaming[start],
+
+        print "%s -> %s [label=\"[%s, %s]%s\", style=%s];" % (renaming[start],
                                                             renaming[end],
                                                             lb,
                                                             ub,
-                                                            edge_style)
+                                                            type_char,
+                                                            style)
     print "}"
 
 def summary(edge_list):
