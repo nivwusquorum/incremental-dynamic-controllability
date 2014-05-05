@@ -41,6 +41,8 @@ def generate_graphviz(edge_list):
     print "digraph G {"
     print "rankdir=\"LR\";"
     for start, end, lb, ub, etype in edge_list:
+        assert etype in ['Controllable', 'Uncontrollable'], \
+                "%s is not a valid edge type" % etype
         edge_style = 'dotted' if etype == 'Uncontrollable' else 'solid'
         lb = '%.2f' % (float(lb))
         ub = '%.2f' % (float(ub),)
@@ -56,12 +58,14 @@ def summary(edge_list):
     print 'Number of edges: %d' % len(edge_list)
     print '    of which'
     controllable = len([e for e in edge_list if e[4] == 'Controllable'])
+    uncontrollable = len([e for e in edge_list if e[4] == 'Uncontrollable'])
+
     print '        controllable: %d' % controllable
-    print '        Uncontrollable: %d' % (len(edge_list) - controllable,)
+    print '        Uncontrollable: %d' % (uncontrollable,)
 
 def parsable(edge_list):
     controllable = [ edge for edge in edge_list if edge[4] == 'Controllable']
-    uncontrollable = [edge for edge in edge_list if edge[4] == 'Controllable']
+    uncontrollable = [edge for edge in edge_list if edge[4] == 'Uncontrollable']
     renaming = get_node_renaming(edge_list)
     print len(controllable)
     for edge in controllable:
@@ -75,12 +79,15 @@ def main():
     #print 'Parsing %s' % (FLAGS.input_file,)
     tree = ET.parse(FLAGS.input_file)
     edge_list = []
-    for constraint in tree.getroot().findall('CONSTRAINT'):        
+    for constraint in tree.getroot().findall('CONSTRAINT'):
+        type = constraint.find('TYPE').text.split(';')[0]
+        if type == 'Constraint':
+            type = 'Controllable'
         edge_list.append((constraint.find('START').text,
                           constraint.find('END').text,
                           constraint.find('LOWERBOUND').text,
                           constraint.find('UPPERBOUND').text,
-                          constraint.find('TYPE').text.split(';')[0],))
+                          type))
     if FLAGS.output_type == 'dot':
         generate_graphviz(edge_list)
     if FLAGS.output_type == 'summary':

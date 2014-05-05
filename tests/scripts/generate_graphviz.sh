@@ -4,6 +4,7 @@ set -o errexit
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 pushd $DIR/../
+[ -d visualized ] || mkdir visualized
 for x in $(ls raw_xml/* | sort -n -t t -k 3)
 do
     filename=$(basename "$x")
