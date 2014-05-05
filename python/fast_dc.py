@@ -27,8 +27,8 @@ class FastDc(object):
         for e in self.network.uncontrollable_edges:
             self.edge_list.append(Edge(e.fro, e.to, e.upper_bound, EdgeType.SIMPLE))
             self.edge_list.append(Edge(e.to, e.fro, -e.lower_bound, EdgeType.SIMPLE))
-            self.edge_list.append(Edge(e.to, e.fro, -e.upper_bound, EdgeType.UPPER_CASE))
-            self.edge_list.append(Edge(e.fro, e.to, e.lower_bound, EdgeType.LOWER_CASE))
+            self.edge_list.append(Edge(e.to, e.fro, -e.upper_bound, EdgeType.UPPER_CASE, e.to))
+            self.edge_list.append(Edge(e.fro, e.to, e.lower_bound, EdgeType.LOWER_CASE, e.to))
 
     def allmax(self):
         """Calculates allmax projection of STNU (see section 2.2). 

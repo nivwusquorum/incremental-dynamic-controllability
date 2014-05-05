@@ -20,7 +20,7 @@ class Stnu(object):
         pairs = []
         for edge in self.controllable_edges:
             # check bounds on edges
-            assert 0 <= edge.lower_bound and edge.lower_bound <= edge.upper_bound
+            assert edge.lower_bound <= edge.upper_bound
             pairs.append((edge.fro, edge.to))
 
         # Controllable edges are not repeated (not two edges connect 
@@ -33,13 +33,19 @@ class Stnu(object):
 
         pairs = []
         input_degree = defaultdict(lambda: 0)
+        uncontrollable_starts = set()
+        uncontrollable_ends = set()
         for edge in self.uncontrollable_edges:
-            # Check bounds on edges. Notice that here 0 is disallowed in
+            # Check bounds on edges. Notice that below 0 is disallowed in
             # contrast to controllable edges
+            uncontrollable_starts.add(edge.fro)
+            uncontrollable_ends.add(edge.to)
             input_degree[edge.to] += 1
-            assert 0 < edge.lower_bound and edge.lower_bound <= edge.upper_bound            
+            assert 0 <= edge.lower_bound and edge.lower_bound <= edge.upper_bound            
             pairs.append((edge.fro, edge.to))
 
+        # no two uncontrollable edges are one after another in the network.
+        assert len(uncontrollable_starts.intersection(uncontrollable_ends)) == 0
         # Controllable edges are not repeated (not two edges connect 
         # the same nodes). Here we really mean it. If two edges between 
         # a pair of nodes had different bounds network is immediately
