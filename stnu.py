@@ -102,7 +102,7 @@ class NamedStnu(Stnu):
         read_edges(num_controllable, self.controllable_edges)
         num_uncontrollable = int(raw_input())
         read_edges(num_uncontrollable, self.uncontrollable_edges)
-        self._num_nodes = len(self._renaming)
+        self.num_nodes = len(self._renaming)
         self.verify_contraints()
 
     def pretty_print(self):
