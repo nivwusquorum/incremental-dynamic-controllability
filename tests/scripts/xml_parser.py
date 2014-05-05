@@ -4,7 +4,7 @@ import sys
 
 gflags.DEFINE_string('input_file', None, 'XML file to convert')
 gflags.MarkFlagAsRequired('input_file')
-gflags.DEFINE_enum('output_type', 'summary', ['summary', 'dot'], 'Type of output to convert the file to')
+gflags.DEFINE_enum('output_type', 'summary', ['summary', 'dot', 'parsable'], 'Type of output to convert the file to')
 
 FLAGS = gflags.FLAGS
 
@@ -59,6 +59,17 @@ def summary(edge_list):
     print '        controllable: %d' % controllable
     print '        Uncontrollable: %d' % (len(edge_list) - controllable,)
 
+def parsable(edge_list):
+    controllable = [ edge for edge in edge_list if edge[4] == 'Controllable']
+    uncontrollable = [edge for edge in edge_list if edge[4] == 'Controllable']
+    renaming = get_node_renaming(edge_list)
+    print len(controllable)
+    for edge in controllable:
+        print '%s %s %s %s' % (renaming[edge[0]], renaming[edge[1]], edge[2], edge[3])
+    print len(uncontrollable)
+    for edge in uncontrollable:
+        print '%s %s %s %s' % (renaming[edge[0]], renaming[edge[1]], edge[2], edge[3])
+
 def main():
     argv = FLAGS(sys.argv)
     #print 'Parsing %s' % (FLAGS.input_file,)
@@ -74,6 +85,8 @@ def main():
         generate_graphviz(edge_list)
     if FLAGS.output_type == 'summary':
         summary(edge_list)
+    if FLAGS.output_type == 'parsable':
+        parsable(edge_list)
 
 if __name__ == '__main__':
     main()
