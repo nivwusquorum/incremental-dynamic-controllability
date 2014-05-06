@@ -1,5 +1,4 @@
 from collections import namedtuple, defaultdict
-from fast_dc import FastDc
 
 
 StnuEdge = namedtuple('StnuEdge', ['fro', 'to', 'lower_bound', 'upper_bound'])
@@ -12,9 +11,6 @@ class Stnu(object):
         self.num_nodes = 0
         self.controllable_edges = []
         self.uncontrollable_edges = []
-        self._is_dc = None
-        self._update_dc = True
-        self._first_time = True
 
     def verify_contraints(self):
         pairs = []
@@ -59,25 +55,6 @@ class Stnu(object):
     @property
     def num_edges(self):
         return len(self.uncontrollable_edges) + len(self.controllable_edges)
-
-    def is_dynamically_controllable(self):
-        # if nothing changed return cached result
-        if not self._update_dc:
-            return self._is_dc
-
-        if self._first_time:
-            # if we calculate DC from the first time use nonincremental
-            self._is_dc = self._fast_dc()
-            self._first_time = False
-        else:
-            self._is_dc = self._incremental_dc()
-
-        self._update_dc = False
-        return self._is_dc
-
-    def _fast_dc(self):
-        solver = FastDc(self)
-        return solver.solve()
 
 
 

@@ -1,6 +1,9 @@
 from collections import namedtuple, defaultdict
 from Queue import Queue
 
+from stnu import StnuEdge
+
+
 class EdgeType(object):
     SIMPLE = 1
     LOWER_CASE = 2
@@ -11,25 +14,65 @@ class Edge(namedtuple('Edge', ['fro', 'to', 'value', 'type', 'maybe_letter'])):
         return cls.__bases__[0].__new__(cls, fro, to, value, type, maybe_letter)
     
 
+class DcTester(object):
+    def __init__(self, stnu):
+        self.stnu = stnu
+        self._is_dc = None
+        self._update_dc = True
+        self._first_time = True
+
+    def is_dynamically_controllable(self):
+        # if nothing changed return cached result
+        if not self._update_dc:
+            return self._is_dc
+
+        if self._first_time:
+            # if we calculate DC from the first time use nonincremental
+            alg = FastDc()
+            self._is_dc = alg.solve(self.stnu)
+            self._first_time = False
+        else:
+            # stub: use incremental algorithm here
+            self._is_dc = None 
+
+        self._update_dc = False
+        return self._is_dc
+
+
 class FastDc(object):
     """Implementation based on paper "A Structural Characterization of Temporal
     Dynamic Controllability" by Paul Morris"""
-    def __init__(self, network):
-        self.network = network
 
-    def generate_graph(self):
+    def generate_graph(self, network):
         """Generates graph of edges as in section 2.2"""
+        num_nodes = network.num_nodes
         edge_list = []
-        for e in self.network.controllable_edges:
+
+        def add_controllable(e):
             edge_list.append(Edge(e.fro, e.to, e.upper_bound, EdgeType.SIMPLE))
             edge_list.append(Edge(e.to, e.fro, -e.lower_bound, EdgeType.SIMPLE))
 
-        for e in self.network.uncontrollable_edges:
+        def add_uncontrollable(e):
             edge_list.append(Edge(e.fro, e.to, e.upper_bound, EdgeType.SIMPLE))
             edge_list.append(Edge(e.to, e.fro, -e.lower_bound, EdgeType.SIMPLE))
             edge_list.append(Edge(e.to, e.fro, -e.upper_bound, EdgeType.UPPER_CASE, e.to))
             edge_list.append(Edge(e.fro, e.to, e.lower_bound, EdgeType.LOWER_CASE, e.to))
-        return edge_list
+
+        for e in network.controllable_edges:
+            add_controllable(e)
+
+        for e in network.uncontrollable_edges:
+            # contingent edges with bounds [l, u] can be normalized to edge
+            # can be replaced by requirement edge [l,l] followed by upper case edge
+            if e.lower_bound == 0:
+                add_uncontrollable(e)
+            else:
+                new_node = num_nodes + 1
+                num_nodes += 1
+                add_controllable(StnuEdge(e.fro, new_node, e.lower_bound, e.lower_bound))
+                add_uncontrollable(StnuEdge(new_node, e.to, 0, e.upper_bound - e.lower_bound))
+
+        return num_nodes, edge_list
 
     def allmax(self, num_nodes, edge_list):
         """Calculates allmax projection of STNU (see section 2.2). 
@@ -105,17 +148,31 @@ class FastDc(object):
         else:
             return (True, distance)
 
-    def reduce_lower_case(self, potentials, edge_list, lc_edge):
+    def reduce_lower_case(self, num_nodes, edge_list, potentials, lc_edge):
         new_edges = []
-        distances = [0] * self.network.num_nodes
+        distance = [None] * (num_nodes+1)
+        distance[lc_edge.to] = 0
+
+        # Notice that here we are going to be using Johnson's algorithm in
+        # a nonintuitive way, we will remove some edges from the original
+        # graph which we use to calculate potentials. If you look through
+        # proof of Johnson's algorithms you will notice that removing edges
+        # never invalidate the key properties of potentials
+        """outgoing_edges = defaultdict(lambda: [])
+        for edge in edge_list:
+            # Ignore lower case edges and upper-case edges with the same letter as lc_edge
+            # (paper terminology: breach)
+            if (edge.type == EdgeType.LOWER_CASE or
+                    (edge.type == EdgeType.UPPER_CASE and
+                    edge.maybe_letter == lc_edge.maybe_letter)):
+                continue"""
 
         return new_edges
 
-    def solve(self):
+    def solve(self, network):
         """Implementation of pseudocode from end of section 3"""
-        K = len(self.network.uncontrollable_edges)
-        new_edges = self.generate_graph()
-        num_nodes = self.network.num_nodes
+        K = len(network.uncontrollable_edges)
+        num_nodes, new_edges = self.generate_graph(network)
         completed_iterations = 0
         all_edges = []
         while len(new_edges) > 0 and completed_iterations <= K:
@@ -126,7 +183,10 @@ class FastDc(object):
                 return False
             for e in all_edges:
                 if e.type == EdgeType.LOWER_CASE:
-                    reduced_edges = self.reduce_lower_case(num_nodes, potentials, e)
+                    reduced_edges = self.reduce_lower_case(num_nodes,
+                                                           edge_list,
+                                                           potentials,
+                                                           e)
                     new_edges.extend(reduced_edges)
             completed_iterations += 1
         # Assuming the theory from the paper checks out. We need one extra
