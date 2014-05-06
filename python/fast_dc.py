@@ -1,5 +1,5 @@
 from collections import namedtuple, defaultdict
-from Queue import Queue
+from Queue import Queue, PriorityQueue
 
 from stnu import StnuEdge
 
@@ -13,6 +13,18 @@ class Edge(namedtuple('Edge', ['fro', 'to', 'value', 'type', 'maybe_letter'])):
     def __new__(cls, fro, to, value, type, maybe_letter=None):
         return cls.__bases__[0].__new__(cls, fro, to, value, type, maybe_letter)
     
+    def __unicode__(self):
+        type_str = ''
+        if self.type == EdgeType.UPPER_CASE:
+            type_str = 'UC(%d):' % self.maybe_letter
+        elif self.type == EdgeType.LOWER_CASE:
+            type_str = 'LC(%d):' % self.maybe_letter
+        return '%d--%s%.1f-->%d' % (self.fro,
+                                    type_str,
+                                    self.value,
+                                    self.to)
+    def __str__(self):
+        return self.__unicode__()
 
 class DcTester(object):
     def __init__(self, stnu):
@@ -102,8 +114,7 @@ class FastDc(object):
                                           weights=weights,
                                           neighbor_list=neighbor_list)
 
-        # exclude artificial 0 node from result
-        return (terminated, distances[1:] if distances else None)
+        return (terminated, distances)
         
     def spfa(self, source, num_nodes, weights, neighbor_list):
         """Shortest Paths Fastests Algorithm - think optimized Bellman-Ford,
@@ -148,31 +159,120 @@ class FastDc(object):
         else:
             return (True, distance)
 
+    def reduce_edge(self, edge1, edge2):
+        # X ---edge1----> Y ----edge2----> Z
+        assert edge2.fro == edge1.to
+        new_fro = edge1.fro
+        new_to = edge2.to
+        new_value = edge1.value + edge2.value
+        new_type = None
+        new_maybe_letter = None
+        # UPPER CASE REDUCTION
+        if edge1.type == EdgeType.SIMPLE and edge2.type == EdgeType.UPPER_CASE:
+            new_maybe_letter = edge2.maybe_letter
+            new_type = EdgeType.UPPER_CASE
+        # LOWER CASE REDUCTION
+        elif (edge1.type == EdgeType.LOWER_CASE and edge2.type == EdgeType.SIMPLE and
+                edge2.value < 0):
+            new_type = EdgeType.SIMPLE
+        # CROSS CASE REDUCTION
+        elif (edge1.type == EdgeType.LOWER_CASE and edge2.type == EdgeType.UPPER_CASE and
+                edge2.value < 0 and edge1.maybe_letter != edge2.maybe_letter):
+            new_maybe_letter = edge2.maybe_letter
+            new_type = EdgeType.UPPER_CASE
+        # NO-CASE REDUCITON
+        elif edge1.type == EdgeType.SIMPLE and edge2.type == EdgeType.SIMPLE:
+            new_type = EdgeType.SIMPLE
+
+        if new_type is None:
+            # not reduction matched
+            return None
+        
+        if new_type == EdgeType.UPPER_CASE:
+            # try applying LABEL REMOVAL
+            # If you thing about this for our purposes SIMPLE edge is strictly
+            # better than upper case.
+            if new_value >= 0:
+                new_type == EdgeType.SIMPLE
+                new_maybe_letter = None
+
+        new_edge = Edge(new_fro, new_to, new_value, new_type, new_maybe_letter)
+        #print '%s combined with %s gave %s' % (edge1, edge2, new_edge)
+        return new_edge
+
+
     def reduce_lower_case(self, num_nodes, edge_list, potentials, lc_edge):
-        new_edges = []
-        distance = [None] * (num_nodes+1)
-        distance[lc_edge.to] = 0
+        new_edges = set()
 
         # Notice that here we are going to be using Johnson's algorithm in
         # a nonintuitive way, we will remove some edges from the original
         # graph which we use to calculate potentials. If you look through
         # proof of Johnson's algorithms you will notice that removing edges
         # never invalidate the key properties of potentials
-        """outgoing_edges = defaultdict(lambda: [])
+        outgoing_edges = defaultdict(lambda: [])
         for edge in edge_list:
             # Ignore lower case edges and upper-case edges with the same letter as lc_edge
             # (paper terminology: breach)
             if (edge.type == EdgeType.LOWER_CASE or
                     (edge.type == EdgeType.UPPER_CASE and
                     edge.maybe_letter == lc_edge.maybe_letter)):
-                continue"""
+                continue
+            outgoing_edges[edge.fro].append(edge)
+        # distance in shortest path's graph
+        reduced_edge = [None] * (num_nodes + 1)
+        distance = [None] * (num_nodes + 1)
+        visited = [False] * (num_nodes + 1)
 
-        return new_edges
+        source = lc_edge.to
+        distance[source] = 0
+
+        q = PriorityQueue()
+        q.put((0, source))
+
+        #print 'processing LCE %s' % (lc_edge,)
+
+        while not q.empty():
+            _, node = q.get()
+            if visited[node]:
+                continue
+            #print 'visiting %d' % node
+            visited[node] = True
+            for edge in outgoing_edges[node]:
+                neighbor = edge.to
+                edge_value_potential = edge.value + potentials[edge.fro] - potentials[edge.to]
+                if (distance[neighbor] is None or
+                        distance[neighbor] > distance[node] + edge_value_potential):
+                    # add calculate reduced edge that lead us here
+                    if reduced_edge[node] is None:
+                        new_reduced_edge = edge
+                    else:
+                        new_reduced_edge = self.reduce_edge(reduced_edge[node], edge)
+                    if new_reduced_edge is None:
+                        # cannot make a reduction
+                        continue
+                    reduced_edge[neighbor] = new_reduced_edge
+                    distance[neighbor] = distance[node] + edge_value_potential
+                    q.put((distance[neighbor], neighbor))
+                    # This the reduced distance as described in the book, excluding the effect of
+                    # potentials
+                    real_reduced_distance = distance[neighbor] + potentials[neighbor] - potentials[source]
+                    # check if we have a moat
+                    if real_reduced_distance < 0:
+                        relevant_edge = self.reduce_edge(lc_edge, reduced_edge[neighbor])
+                        
+                        if relevant_edge is not None:
+                            #print '^^ moat ^^'
+                            new_edges.add(relevant_edge)
+
+        return list(new_edges)
 
     def solve(self, network):
         """Implementation of pseudocode from end of section 3"""
         K = len(network.uncontrollable_edges)
         num_nodes, new_edges = self.generate_graph(network)
+        #print 'start graph (%d nodes):' % num_nodes
+        #for edge in new_edges:
+        #    print '    %s' % (edge,)
         completed_iterations = 0
         all_edges = []
         while len(new_edges) > 0 and completed_iterations <= K:
@@ -184,7 +284,7 @@ class FastDc(object):
             for e in all_edges:
                 if e.type == EdgeType.LOWER_CASE:
                     reduced_edges = self.reduce_lower_case(num_nodes,
-                                                           edge_list,
+                                                           all_edges,
                                                            potentials,
                                                            e)
                     new_edges.extend(reduced_edges)
