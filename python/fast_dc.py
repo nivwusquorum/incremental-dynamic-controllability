@@ -264,6 +264,9 @@ class FastDc(object):
                             #print '^^ moat ^^'
                             new_edges.add(relevant_edge)
 
+        #for edge in list(new_edges):
+        #    print '   %s' % (edge,)
+
         return list(new_edges)
 
     def solve(self, network):
@@ -276,6 +279,7 @@ class FastDc(object):
         completed_iterations = 0
         all_edges = []
         while len(new_edges) > 0 and completed_iterations <= K:
+            #print 'iteration %d' % (completed_iterations,)
             all_edges.extend(new_edges)
             new_edges = []
             consistent, potentials = self.allmax(num_nodes, all_edges)
