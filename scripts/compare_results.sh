@@ -82,7 +82,7 @@ do
     fi
 done
 # clean up
-for file in {tmp.tmp, xml_input.tmp,parsable_input.tmp,java_output.tmp,python_output.tmp,java_time.tmp,python_time.tmp}
+for file in {tmp.tmp,xml_input.tmp,parsable_input.tmp,java_output.tmp,python_output.tmp,java_time.tmp,python_time.tmp}
 do
     [ -f $file ] && rm $file
 done
