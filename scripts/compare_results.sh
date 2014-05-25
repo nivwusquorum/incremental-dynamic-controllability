@@ -26,7 +26,7 @@ do
         echo "skipping $fullfilename: unsupported extension"
         continue
     fi
-    if !(/usr/bin/time -f'%e' \
+    if !(/usr/local/bin/gtime -f'%e' \
         java -jar $DIR/java/dc-checking.jar xml_input.tmp 100000 \
         > java_output.tmp \
         2> java_time.tmp)
@@ -35,7 +35,7 @@ do
         cat java_output.tmp | sed "s/^/  >>/"
         continue
     fi
-    if !(/usr/bin/time -f'%e' \
+    if !(/usr/local/bin/gtime -f'%e' \
         python $DIR/python/tester.py < parsable_input.tmp \
         > python_output.tmp \
         2> python_time.tmp)
