@@ -3,6 +3,18 @@ set -o nounset
 set -o errexit
 DIR="$( pushd  "$( dirname "${BASH_SOURCE[0]}" )"/.. > /dev/null && pwd && popd > /dev/null)"
 
+
+if [[ $(uname) == "Linux" ]]
+then 
+    TIME="/usr/bin/time"
+elif [[ $(uname) == "Darwin" ]]
+then
+    TIME="/usr/local/bin/gtime"
+else
+    echo "unknown OS"
+    exit 1
+fi
+
 for filepath in $@
 do
     fullfilename=$(basename "$filepath")
@@ -26,7 +38,7 @@ do
         echo "skipping $fullfilename: unsupported extension"
         continue
     fi
-    if !(/usr/local/bin/gtime -f'%e' \
+    if !($TIME -f'%e' \
         java -jar $DIR/java/dc-checking.jar xml_input.tmp 100000 \
         > java_output.tmp \
         2> java_time.tmp)
@@ -35,7 +47,7 @@ do
         cat java_output.tmp | sed "s/^/  >>/"
         continue
     fi
-    if !(/usr/local/bin/gtime -f'%e' \
+    if !($TIME -f'%e' \
         python $DIR/python/tester.py < parsable_input.tmp \
         > python_output.tmp \
         2> python_time.tmp)
