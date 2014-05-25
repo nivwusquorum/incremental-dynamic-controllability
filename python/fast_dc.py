@@ -193,7 +193,7 @@ class FastDc(object):
             # If you thing about this for our purposes SIMPLE edge is strictly
             # better than upper case.
             if new_value >= 0:
-                new_type == EdgeType.SIMPLE
+                new_type = EdgeType.SIMPLE
                 new_maybe_letter = None
 
         new_edge = Edge(new_fro, new_to, new_value, new_type, new_maybe_letter)
