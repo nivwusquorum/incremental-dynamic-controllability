@@ -9,20 +9,39 @@ class EdgeType(object):
     LOWER_CASE = 2
     UPPER_CASE = 3
 
-class Edge(namedtuple('Edge', ['fro', 'to', 'value', 'type', 'maybe_letter'])):
-    def __new__(cls, fro, to, value, type, maybe_letter=None):
-        return cls.__bases__[0].__new__(cls, fro, to, value, type, maybe_letter)
-    
-    def __unicode__(self):
+class Edge(object):
+    def __init__(self, fro, to, value, type, maybe_letter=None,renaming=None):
+        self.fro = fro
+        self.to = to
+        self.value = value
+        self.type = type
+        self.maybe_letter = maybe_letter
+        self.renaming = renaming
+
+    def hash(self):
+        return hash((fro,to,value,type,maybe_letter))    
+
+    def _printit(self, fro, to, maybe_letter):
         type_str = ''
         if self.type == EdgeType.UPPER_CASE:
-            type_str = 'UC(%d):' % self.maybe_letter
+            type_str = 'UC(%s):' % maybe_letter
         elif self.type == EdgeType.LOWER_CASE:
-            type_str = 'LC(%d):' % self.maybe_letter
-        return '%d--%s%.1f-->%d' % (self.fro,
+            type_str = 'LC(%s):' % maybe_letter
+        return '%s....%s%.1f....>%s' % (fro,
                                     type_str,
                                     self.value,
-                                    self.to)
+                                    to)
+
+    def __unicode__(self):
+        if self.renaming is None:
+            return self._printit(self.fro, self.to, self.maybe_letter)
+        else:
+            return self._printit(self.renaming[self.fro],
+                          self.renaming[self.to],
+                          self.renaming[self.maybe_letter] 
+                          if self.maybe_letter is not None else None)
+
+
     def __str__(self):
         return self.__unicode__()
 
@@ -60,15 +79,17 @@ class FastDc(object):
         num_nodes = network.num_nodes
         edge_list = []
 
-        def add_controllable(e):
-            edge_list.append(Edge(e.fro, e.to, e.upper_bound, EdgeType.SIMPLE))
-            edge_list.append(Edge(e.to, e.fro, -e.lower_bound, EdgeType.SIMPLE))
+        renaming = { k:v for k,v in network._inverse_renaming.items() }
+
+        def add_controllable(e):        
+            edge_list.append(Edge(e.fro, e.to, e.upper_bound, EdgeType.SIMPLE, renaming=renaming))
+            edge_list.append(Edge(e.to, e.fro, -e.lower_bound, EdgeType.SIMPLE, renaming=renaming))
 
         def add_uncontrollable(e):
-            edge_list.append(Edge(e.fro, e.to, e.upper_bound, EdgeType.SIMPLE))
-            edge_list.append(Edge(e.to, e.fro, -e.lower_bound, EdgeType.SIMPLE))
-            edge_list.append(Edge(e.to, e.fro, -e.upper_bound, EdgeType.UPPER_CASE, e.to))
-            edge_list.append(Edge(e.fro, e.to, e.lower_bound, EdgeType.LOWER_CASE, e.to))
+            edge_list.append(Edge(e.fro, e.to, e.upper_bound, EdgeType.SIMPLE, renaming=renaming))
+            edge_list.append(Edge(e.to, e.fro, -e.lower_bound, EdgeType.SIMPLE, renaming=renaming))
+            edge_list.append(Edge(e.to, e.fro, -e.upper_bound, EdgeType.UPPER_CASE, e.to, renaming=renaming))
+            edge_list.append(Edge(e.fro, e.to, e.lower_bound, EdgeType.LOWER_CASE, e.to, renaming=renaming))
 
         for e in network.controllable_edges:
             add_controllable(e)
@@ -81,8 +102,11 @@ class FastDc(object):
             else:
                 new_node = num_nodes + 1
                 num_nodes += 1
+                renaming[new_node] = renaming[e.fro] + "'"
                 add_controllable(StnuEdge(e.fro, new_node, e.lower_bound, e.lower_bound))
                 add_uncontrollable(StnuEdge(new_node, e.to, 0, e.upper_bound - e.lower_bound))
+
+
 
         return num_nodes, edge_list
 
@@ -196,8 +220,8 @@ class FastDc(object):
                 new_type = EdgeType.SIMPLE
                 new_maybe_letter = None
 
-        new_edge = Edge(new_fro, new_to, new_value, new_type, new_maybe_letter)
-        #print '%s combined with %s gave %s' % (edge1, edge2, new_edge)
+        new_edge = Edge(new_fro, new_to, new_value, new_type, new_maybe_letter, renaming=edge1.renaming)
+        #print 'combine \t%s \twith \t%s \tto get \t%s' %(edge1, edge2, new_edge)
         return new_edge
 
 
@@ -283,6 +307,7 @@ class FastDc(object):
             all_edges.extend(new_edges)
             new_edges = []
             consistent, potentials = self.allmax(num_nodes, all_edges)
+            #print '   allmax check %s' % ('succeeded' if consistent else 'failed')
             if not consistent:
                 return False
             for e in all_edges:
@@ -292,6 +317,8 @@ class FastDc(object):
                                                            potentials,
                                                            e)
                     new_edges.extend(reduced_edges)
+            #for e in new_edges:
+            #    print '    adding edge: %s (hash: %d)' % (e, hash(e))
             completed_iterations += 1
         # Assuming the theory from the paper checks out. We need one extra
         # iteration to verify that no edge was actually added.

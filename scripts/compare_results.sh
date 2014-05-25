@@ -3,6 +3,7 @@ set -o nounset
 set -o errexit
 DIR="$( pushd  "$( dirname "${BASH_SOURCE[0]}" )"/.. > /dev/null && pwd && popd > /dev/null)"
 
+: "${CR_DEBUG:=false}"
 
 if [[ $(uname) == "Linux" ]]
 then 
@@ -57,6 +58,17 @@ do
         echo "lpl"
         continue
     fi
+    if [[ "$CR_DEBUG" == "true" ]]
+    then
+        echo "Java output:"
+        cat java_output.tmp | sed "s/^/    /g"
+        echo "Python output:"
+        cat python_output.tmp | sed "s/^/    /g"
+    fi
+    cat java_output.tmp > tmp.tmp
+    cat tmp.tmp | tail -1 > java_output.tmp
+    cat python_output.tmp > tmp.tmp
+    cat tmp.tmp | tail -1 > python_output.tmp
     $DIR/scripts/output_flip.sh java_output.tmp
     JAVA_OUTPUT=$(cat java_output.tmp)
     PYTHON_OUTPUT=$(cat python_output.tmp)
@@ -70,7 +82,7 @@ do
     fi
 done
 # clean up
-for file in {xml_input.tmp,parsable_input.tmp,java_output.tmp,python_output.tmp,java_time.tmp,python_time.tmp}
+for file in {tmp.tmp, xml_input.tmp,parsable_input.tmp,java_output.tmp,python_output.tmp,java_time.tmp,python_time.tmp}
 do
     [ -f $file ] && rm $file
 done
